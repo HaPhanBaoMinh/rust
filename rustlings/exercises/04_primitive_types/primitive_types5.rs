@@ -4,5 +4,5 @@ fn main() {
     // TODO: Destructure the `cat` tuple in one statement so that the println works.
     // let /* your pattern here */ = cat;
 
-    println!("{name} is {age} years old");
+    println!("{} is {} years old", cat.0, cat.1);
 }
