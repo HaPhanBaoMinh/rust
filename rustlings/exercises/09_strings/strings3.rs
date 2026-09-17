@@ -6,13 +6,13 @@ fn trim_me(input: &str) -> &str {
 fn compose_me(input: &str) -> String {
     // TODO: Add " world!" to the string! There are multiple ways to do this.
     let mut s = String::from(input);
-    s.push_str("world");
+    s.push_str(" world!");
     s
 }
 
 fn replace_me(input: &str) -> String {
     let s = String::from(input);
-    s.replace("cars", "ballons")
+    s.replace("cars", "balloons")
 }
 
 fn main() {
