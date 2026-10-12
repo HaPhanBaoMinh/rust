@@ -1,115 +1,59 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fs::{self},
-};
-use std::{fs::read_to_string, time};
+use std::{collections::HashMap, fs::read_to_string, ops::Index};
 
 fn main() {
     // Argument
     // let search_value_arg = std::env::args().nth(1).expect("No log level given");
-    let path_arg = std::env::args().nth(2).expect("No path given");
-
-    // Benmark
-    let now = time::Instant::now();
+    let path_arg = std::env::args().nth(1).expect("No path given");
 
     let file_content = read_to_string(path_arg).unwrap();
-    let logs: Vec<&str> = file_content.split("\n").collect();
+    let docs_vec: Vec<&str> = file_content.split("\n").collect();
+    let mut inverted_index: HashMap<(String, usize), TermStats> = HashMap::new();
 
-    let _ = tf(logs);
+    tf(docs_vec);
+}
 
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+// TermStats
+struct TermStats {
+    tf: String,
+    idf: String,
+    ifidf: String
 }
 
 fn analyzer(doc: &str) -> Vec<&str> {
-    doc.split(" ").collect()
+    doc.split_whitespace().collect()
 }
 
-fn tf(docs: Vec<&str>) -> Result<(), Box<dyn Error>> {
-    let mut total_word_in_docs: usize = 0;
+fn tf(docs:Vec<&str>) -> HashMap<(String, usize), f64> {
+    let result: HashMap<(String, usize), f64> = HashMap::new();
 
-    let mut tf_list: HashMap<&str, i64> = HashMap::new();
-    let mut idf_list: HashMap<&str, i64> = HashMap::new();
+    for (index, doc) in docs.iter().enumerate() {
+        let tokens = analyzer(doc);
 
-    for doc in &docs {
-        let mut words = analyzer(doc);
-
-        total_word_in_docs += words.len();
-
-        for &word in &words {
-            let count = tf_list.entry(word).or_insert(0);
-            *count += 1;
-        }
-
-        // dedup() chỉ loại bỏ phần tử trùng nằm cạnh nhau.
-        words.sort_unstable();
-        words.dedup();
-
-        for &word in &words {
-            let count = idf_list.entry(word).or_insert(0);
-            *count += 1;
-        }
-    }
-
-    tf_list.insert("TOTAL_WORD", total_word_in_docs as i64);
-    tf_list.insert("TOTAL_DOC", docs.len() as i64);
-
-    update_values("./db.toml", tf_list, "")?;
-    update_values("./db.toml", idf_list, "idf_")?;
-    Ok(())
-}
-
-pub fn read_value(file_path: &str, key: &str) -> Result<Option<f64>, Box<dyn Error>> {
-    let content = match fs::read_to_string(file_path) {
-        Ok(content) => content,
-
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(None);
-        }
-
-        Err(error) => return Err(error.into()),
+        for &word in &tokens {
+            let token_count = tokens.len();
+            let count = analyzer(doc).iter().filter(|candidate| **candidate == word).count();
+            let tf = count as f64 / token_count as f64;
+            println!("Doc: {} - Word: {} - TF: {}", index, word, tf);
+        };
     };
 
-    let table: toml::Table = toml::from_str(&content)?;
+    result
 
-    match table.get(key) {
-        None => Ok(None),
-
-        Some(toml::Value::Float(value)) => Ok(Some(*value)),
-
-        // Cho phép đọc cả giá trị TOML dạng integer rồi chuyển sang f64
-        Some(toml::Value::Integer(value)) => Ok(Some(*value as f64)),
-
-        Some(value) => Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("Key '{key}' không chứa số: {value:?}"),
-        )
-        .into()),
-    }
 }
 
-fn update_values<'a>(
-    file_path: &str,
-    values: HashMap<&'a str, i64>,
-    prefix: &str,
-) -> Result<(), Box<dyn Error>> {
-    let mut table: toml::Table = match fs::read_to_string(file_path) {
-        Ok(content) => toml::from_str(&content)?,
 
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => toml::Table::new(),
+fn idf(docs:Vec<&str>) -> HashMap<String, f64> {
+    let mut result: HashMap<String, f64> = HashMap::new();
 
-        Err(error) => return Err(error.into()),
-    };
-
-    for (key, value) in values {
-        let output_key = format!("{prefix}{key}");
-
-        table.insert(output_key, toml::Value::Integer(value));
-    }
-
-    let content = toml::to_string_pretty(&table)?;
-    fs::write(file_path, content)?;
-
-    Ok(())
+    result
 }
+
+
+// Database table: one row per (term, document) pair
+// Term | Doc_id | TF | IDF | TF-IDF | token_count
+// - Term:   token produced by `analyzer`
+// - Doc_id: line index of the document in the log file
+// - TF:     term count in doc / total terms in doc
+// - IDF:    ln(total docs / docs containing term)
+// - TF-IDF: TF * IDF, used to rank search results
+// - token_count: Total token in 1 doc
