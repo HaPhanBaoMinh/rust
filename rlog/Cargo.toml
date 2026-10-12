@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 strum = { version = "0.28.0", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
