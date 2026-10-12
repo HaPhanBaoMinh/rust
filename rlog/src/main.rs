@@ -23,27 +23,35 @@ fn analyzer(doc: &str) -> Vec<&str> {
     doc.split_whitespace().collect()
 }
 
-fn tf(docs:Vec<&str>) -> HashMap<(String, usize), f64> {
-    let result: HashMap<(String, usize), f64> = HashMap::new();
+fn tf(docs:Vec<&str>) -> HashMap<(usize, &str), f64> {
+    let mut result: HashMap<(usize, &str), f64> = HashMap::new();
 
     for (index, doc) in docs.iter().enumerate() {
         let tokens = analyzer(doc);
 
         for &word in &tokens {
             let token_count = tokens.len();
-            let count = analyzer(doc).iter().filter(|candidate| **candidate == word).count();
+            let count = tokens.iter().filter(|candidate| **candidate == word).count();
             let tf = count as f64 / token_count as f64;
             println!("Doc: {} - Word: {} - TF: {}", index, word, tf);
+            result.insert((index,word), tf);
         };
     };
-
     result
-
 }
 
 
 fn idf(docs:Vec<&str>) -> HashMap<String, f64> {
     let mut result: HashMap<String, f64> = HashMap::new();
+
+    for (index, doc) in docs.iter().enumerate() {
+        let tokens = analyzer(doc);
+        let doc_count = docs.len();
+
+        for &word in &tokens {
+            let count = doc.contains(&word);
+        };
+    };
 
     result
 }
