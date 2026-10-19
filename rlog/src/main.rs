@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fs::read_to_string, ops::Index};
+use std::{collections::{HashMap, HashSet}, fs::read_to_string };
+
+mod db;
 
 fn main() {
     // Argument
@@ -6,53 +8,52 @@ fn main() {
     let path_arg = std::env::args().nth(1).expect("No path given");
 
     let file_content = read_to_string(path_arg).unwrap();
-    let docs_vec: Vec<&str> = file_content.split("\n").collect();
-    let mut inverted_index: HashMap<(String, usize), TermStats> = HashMap::new();
+    let docs_vec: Vec<&str> = file_content.lines().filter(|l| !l.trim().is_empty()).collect();
 
-    tf(docs_vec);
+    tf(&docs_vec);
+    df(&docs_vec);
 }
 
-// TermStats
-struct TermStats {
-    tf: String,
-    idf: String,
-    ifidf: String
+// Splits on any non-alphanumeric char and lowercases, so "[error]" and "Error" both become "error".
+// Search queries must go through the same analyzer.
+fn analyzer(doc: &str) -> Vec<String> {
+    doc.split(|c: char| !c.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+        .map(|token| token.to_lowercase())
+        .collect()
 }
 
-fn analyzer(doc: &str) -> Vec<&str> {
-    doc.split_whitespace().collect()
-}
-
-fn tf(docs:Vec<&str>) -> HashMap<(usize, &str), f64> {
-    let mut result: HashMap<(usize, &str), f64> = HashMap::new();
+fn tf(docs: &[&str]) -> HashMap<(usize, String), f64> {
+    let mut result: HashMap<(usize, String), f64> = HashMap::new();
 
     for (index, doc) in docs.iter().enumerate() {
         let tokens = analyzer(doc);
 
-        for &word in &tokens {
+        for word in &tokens {
             let token_count = tokens.len();
-            let count = tokens.iter().filter(|candidate| **candidate == word).count();
+            let count = tokens.iter().filter(|candidate| *candidate == word).count();
             let tf = count as f64 / token_count as f64;
             println!("Doc: {} - Word: {} - TF: {}", index, word, tf);
-            result.insert((index,word), tf);
+            result.insert((index, word.clone()), tf);
         };
     };
+
+    db::save_tf(db::DB_PATH, docs, &result).unwrap();
     result
 }
 
 
-fn idf(docs:Vec<&str>) -> HashMap<String, f64> {
-    let mut result: HashMap<String, f64> = HashMap::new();
+fn df(docs: &[&str]) -> HashMap<String, usize> {
+    let mut result: HashMap<String, usize> = HashMap::new();
 
-    for (index, doc) in docs.iter().enumerate() {
-        let tokens = analyzer(doc);
-        let doc_count = docs.len();
-
-        for &word in &tokens {
-            let count = doc.contains(&word);
+    for doc in docs {
+        let tokens: HashSet<String> = analyzer(doc).into_iter().collect();
+        for word in tokens {
+            *result.entry(word).or_insert(0) += 1;
         };
     };
 
+    db::save_df(db::DB_PATH, &result).unwrap();
     result
 }
 
