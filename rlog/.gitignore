@@ -1,0 +1,6 @@
+# Generated search index (rebuild with: cargo run --release -- index <file>)
+data/search_index.db
+data/search_index.db-journal
+
+# Large datasets, too big for GitHub
+data/bgl_1m.log

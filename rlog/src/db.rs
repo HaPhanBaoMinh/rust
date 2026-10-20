@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 pub const DB_PATH: &str = "data/search_index.db";
 
@@ -67,4 +67,28 @@ pub fn save_df(path: &str, df_map: &HashMap<String, usize>) -> rusqlite::Result<
         }
     }
     tx.commit()
+}
+
+// Number of docs containing `term`, or None if the term was never indexed.
+pub fn get_df(conn: &Connection, term: &str) -> rusqlite::Result<Option<i64>> {
+    conn.query_row("SELECT df FROM df WHERE term = ?1", params![term], |row| row.get(0))
+        .optional()
+}
+
+// Posting list of `term`: every (doc_id, tf) pair where the term appears.
+pub fn get_tf(conn: &Connection, term: &str) -> rusqlite::Result<Vec<(i64, f64)>> {
+    let mut stmt = conn.prepare("SELECT doc_id, tf FROM tf WHERE term = ?1")?;
+    let rows = stmt.query_map(params![term], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    rows.collect()
+}
+
+// Total number of indexed docs (N in idf = ln(N / df)).
+pub fn total_docs(conn: &Connection) -> rusqlite::Result<i64> {
+    conn.query_row("SELECT COUNT(*) FROM docs", [], |row| row.get(0))
+}
+
+// Original log line of `doc_id`, or None if no such doc.
+pub fn get_doc(conn: &Connection, doc_id: i64) -> rusqlite::Result<Option<String>> {
+    conn.query_row("SELECT content FROM docs WHERE doc_id = ?1", params![doc_id], |row| row.get(0))
+        .optional()
 }
