@@ -125,27 +125,43 @@ fn scan_search(path: &str, value: &str) -> Vec<String> {
     search_result
 }
 
+// Max share of docs a query term may appear in before search skips it as too common.
+const MAX_DF_RATIO: f64 = 0.5;
+
 fn search(value: &str) -> Vec<String> {
     let mut scores: HashMap<i64, f64> = HashMap::new();
     let conn = Connection::open(db::DB_PATH).expect("Cannot open DB");
 
-    let tokens = analyzer(value);
+    // HashSet: "error error" only reads the index once
+    let tokens: HashSet<String> = analyzer(value).into_iter().collect();
     let total_docs = total_docs(&conn).expect("Query total docs failed");
 
-    for token in tokens  {
-       let token_tf = get_tf(&conn, &token).expect("Query tf failed");
-       let df_result = get_df(&conn, &token).expect("Query df failed");
+    let mut terms: Vec<(String, i64)> = Vec::new();
+    for token in tokens {
+        let df_result = get_df(&conn, &token).expect("Query df failed");
+        match df_result {
+            Some(df) => terms.push((token, df)), // term found in the index
+            None => continue,                    // term not in the index: no doc contains it, skip
+        }
+    }
 
-       let token_df = match df_result {
-           Some(df) => df,       // term found in the index
-           None => continue,     // term not in the index: no doc contains it, skip
-       };
-       let idf = (total_docs as f64 / token_df as f64).ln();
+    let (mut kept, common): (Vec<(String, i64)>, Vec<(String, i64)>) = terms
+        .into_iter()
+        .partition(|(_, df)| (*df as f64 / total_docs as f64) <= MAX_DF_RATIO);
+    if kept.is_empty() {
+        if let Some(rarest) = common.into_iter().min_by_key(|(_, df)| *df) {
+            kept.push(rarest);
+        }
+    }
 
-       for (doc_id, tf) in token_tf {
-         let tfidf = tf * idf;
-         *scores.entry(doc_id).or_insert(0.0) += tfidf;
-      }
+    for (token, token_df) in kept {
+        let idf = (total_docs as f64 / token_df as f64).ln();
+        let token_tf = get_tf(&conn, &token).expect("Query tf failed");
+
+        for (doc_id, tf) in token_tf {
+            let tfidf = tf * idf;
+            *scores.entry(doc_id).or_insert(0.0) += tfidf;
+        }
     }
 
     let mut ranked: Vec<(i64, f64)> = scores.into_iter().collect();
@@ -162,7 +178,6 @@ fn search(value: &str) -> Vec<String> {
 
     search_result
 }
-
 
 // Database table: one row per (term, document) pair
 // Term | Doc_id | TF | IDF | TF-IDF | token_count
